@@ -1,0 +1,18 @@
+# Qdrant configuration tuning (example for a single-node server)
+storage:
+  wal:
+    enabled: true
+    sync: true
+  mlock:
+    enabled: false
+  mmap:
+    enabled: true
+  path: /qdrant/storage
+  # Sparse/dense indexing tuning options
+service:
+  api:
+    address: 0.0.0.0
+    port: 6333
+rocksdb:
+  max_background_compactions: 4
+  max_background_flushes: 2
