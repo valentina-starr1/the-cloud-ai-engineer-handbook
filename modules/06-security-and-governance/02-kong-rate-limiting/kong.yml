@@ -1,0 +1,28 @@
+_format_version: "1.1"
+services:
+  - name: llm-service
+    url: http://llm-backend.svc.cluster.local:8000
+
+routes:
+  - name: llm-route
+    paths: ["/v1/llm"]
+    service: llm-service
+
+consumers:
+  - username: example-client
+    credentials:
+      - key-auth: { key: "EXAMPLE_API_KEY" }
+
+plugins:
+  - name: key-auth
+    service: llm-service
+    config: {}
+  - name: rate-limiting
+    service: llm-service
+    config:
+      minute: 1000
+      hour: 10000
+      policy: local
+  - name: prometheus
+    service: llm-service
+    config: {}
