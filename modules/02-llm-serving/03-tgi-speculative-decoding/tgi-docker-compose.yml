@@ -1,0 +1,26 @@
+version: "3.8"
+services:
+  tgi:
+    image: huggingface/text-generation-inference:latest
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      - MODEL_ID=gpt-neo-2.7B
+      - HF_HOME=/cache/hf
+    volumes:
+      - ./model_cache:/cache/hf
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+  rescoring:
+    image: your-org/tgi-rescorer:latest
+    environment:
+      - PORT=8081
+    ports:
+      - "8081:8081"
+    restart: on-failure
