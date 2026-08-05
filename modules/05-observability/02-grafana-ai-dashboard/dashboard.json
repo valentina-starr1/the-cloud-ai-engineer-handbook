@@ -1,0 +1,29 @@
+{
+  "annotations": {"list": []},
+  "panels": [
+    {
+      "type": "graph",
+      "title": "GPU VRAM Usage",
+      "targets": [
+        {"expr": "(sum(gpu_vram_usage_bytes) by (instance, gpu_id) / sum(gpu_vram_total_bytes) by (instance, gpu_id)) * 100"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Time-to-First-Token (TTFT)",
+      "targets": [
+        {"expr": "job:llm_ttft:avg_rate5m"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Internal Token Latency (ITL) 95th pct",
+      "targets": [
+        {"expr": "job:llm_itl:percentile:95m"}
+      ]
+    }
+  ],
+  "title": "AI Infrastructure - GPU Cluster",
+  "schemaVersion": 16,
+  "version": 1
+}
