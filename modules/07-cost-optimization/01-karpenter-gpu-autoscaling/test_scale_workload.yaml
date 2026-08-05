@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-stress-test
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gpu-stress
+  template:
+    metadata:
+      labels:
+        app: gpu-stress
+    spec:
+      tolerations:
+        - key: "workload-type"
+          operator: "Equal"
+          value: "gpu"
+          effect: "NoSchedule"
+      containers:
+        - name: stress
+          image: nvidia/cuda:11.7.1-base-ubuntu20.04
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+            requests:
+              cpu: "1000m"
+              memory: "2Gi"

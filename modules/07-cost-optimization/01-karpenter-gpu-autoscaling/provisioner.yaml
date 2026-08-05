@@ -1,0 +1,26 @@
+apiVersion: karpenter.sh/v1alpha5
+kind: Provisioner
+metadata:
+  name: gpu-provisioner
+spec:
+  ttlSecondsUntilExpired: 300
+  consolidation:
+    enabled: true
+  provider:
+    subnetSelector:
+      karpenter.sh/discovery: kubernetes
+    securityGroupSelector:
+      kubernetes.io/cluster/my-cluster: "owned"
+  requirements:
+    - key: "karpenter.k8s.amazonaws.com/instance-type"
+      operator: In
+      values: ["p3.2xlarge", "g4dn.xlarge", "g5.xlarge", "p4d.24xlarge"]
+    - key: "node.kubernetes.io/instance-type"
+      operator: Exists
+  limits:
+    resources:
+      cpu: "2000"
+  taints:
+    - key: "workload-type"
+      value: "gpu"
+      effect: "NoSchedule"
