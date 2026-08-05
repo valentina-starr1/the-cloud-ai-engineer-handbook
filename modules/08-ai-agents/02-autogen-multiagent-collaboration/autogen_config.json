@@ -1,0 +1,12 @@
+{
+  "agents": [
+    {"name": "UserProxyAgent", "role": "mediates user intent, sanitizes requests", "model": "gpt-4o"},
+    {"name": "AssistantAgent", "role": "high-level planning and orchestration", "model": "gpt-4o"},
+    {"name": "CoderAgent", "role": "writes and validates code", "model": "gpt-code"}
+  ],
+  "tools": {
+    "code_executor": {"allowed_agents": ["CoderAgent"]},
+    "http_fetch": {"allowed_agents": ["AssistantAgent"]}
+  },
+  "defaults": {"max_turns": 10, "temperature": 0.2}
+}
