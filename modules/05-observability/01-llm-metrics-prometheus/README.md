@@ -1,14 +1,18 @@
-LLM metrics tracking with Prometheus and OpenTelemetry
+# Prometheus & OpenTelemetry LLM Tracking
 
-This module explains how to track key LLM metrics:
-- TTFT: Time To First Token — measured from request arrival until first token is produced
-- ITL: Inference Token Latency — per-token latency
-- GPU VRAM saturation: sampled via nvidia-smi when available
+This module documents metrics and alert rules for tracking LLM performance and GPU saturation.
 
-Files
-- prometheus-rules.yaml: sample Prometheus alert rules for CUDA OOM and latency spikes
-- telemetry_middleware.py: FastAPI middleware that instruments requests and exports Prometheus metrics via OpenTelemetry
+Key metrics to collect:
 
-Usage
-- Deploy a Prometheus server scraping /metrics from your FastAPI app.
-- Use the provided Prometheus rules to alert on high latency or GPU memory saturation.
+- ttft_seconds: Time to first token for LLM responses.
+- internal_ttf_latency_seconds (itl): Internal token-level latency for streaming models.
+- gpu_vram_usage_bytes: Per-GPU VRAM usage.
+- gpu_vram_total_bytes: Total VRAM on the device to compute saturation percentage.
+
+Instrumentation guidance:
+
+- Export OpenTelemetry metrics from model servers (FastAPI, Ray serve, Triton) and scrape with Prometheus.
+- Use labels: job, model_name, deployment, gpu_id, instance_type.
+- Compute saturation: (gpu_vram_usage_bytes / gpu_vram_total_bytes) * 100.
+
+Prometheus alerts include CUDA OOM detection and sustained latency spikes. See prometheus-rules.yaml for examples.

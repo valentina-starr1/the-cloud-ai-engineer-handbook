@@ -1,38 +1,42 @@
 groups:
-- name: llm-alerts
-  rules:
-  - alert: LLMLatencySpike
-    expr: histogram_quantile(0.95, sum(rate(request_latency_seconds_bucket[5m])) by (le)) > 2
-    for: 2m
-    labels:
-      severity: page
-    annotations:
-      summary: "95th percentile LLM request latency > 2s"
-      description: "High latency detected for LLM requests. Check model servers and queue lengths."
+  - name: llm-observability-rules
+    rules:
+      - alert: CUDA_OOM_Detected
+        expr: |
+          increase(container_last_seen_restart_reason{reason=~"OOM|oom|OutOfMemoryError"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CUDA OOM detected on {{ $labels.instance }}"
+          description: "One or more containers restarted due to OOM in the last 5 minutes. Investigate memory usage and checkpointing."
 
-  - alert: LLMTTFTHigh
-    expr: histogram_quantile(0.95, sum(rate(ttft_seconds_bucket[5m])) by (le)) > 1
-    for: 2m
-    labels:
-      severity: warning
-    annotations:
-      summary: "TTFT (95th) > 1s"
-      description: "Time to first token is high, may indicate model cold start or I/O bottleneck."
+      - alert: GPU_VRAM_Saturation
+        expr: |
+          (sum by (instance, gpu_id) (gpu_vram_usage_bytes) / sum by (instance, gpu_id) (gpu_vram_total_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High GPU VRAM saturation on {{ $labels.instance }}"
+          description: "GPU VRAM saturation above 90% for 5 minutes. Consider scaling or reducing batch size."
 
-  - alert: GPUVRAMSaturation
-    expr: avg by(instance) (nvidia_gpu_memory_used_bytes / nvidia_gpu_memory_total_bytes) > 0.9
-    for: 1m
-    labels:
-      severity: page
-    annotations:
-      summary: "GPU VRAM saturation > 90%"
-      description: "GPU memory near full. Consider scaling out or reducing batch sizes."
+      - alert: LLM_TTF_Spike
+        expr: |
+          job:llm_ttft:avg_rate5m > 2
+        for: 2m
+        labels:
+          severity: page
+        annotations:
+          summary: "Time-to-first-token spike for LLM service"
+          description: "Average TTFT across instances exceeded 2s for over 2 minutes. Check model warmup, cold starts, or network issues."
 
-  - alert: CUDAOOMDetected
-    expr: increase(cuda_oom_events_total[5m]) > 0
-    for: 0m
-    labels:
-      severity: critical
-    annotations:
-      summary: "CUDA OOM events detected"
-      description: "One or more CUDA OOM events observed in the cluster. Immediate investigation required."
+      - alert: Internal_Token_Latency_Sustained
+        expr: |
+          job:llm_itl:percentile:95m > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High internal token latency (ITL) detected"
+          description: "95th percentile ITL > 0.5s. Investigate model batching or streaming backpressure."

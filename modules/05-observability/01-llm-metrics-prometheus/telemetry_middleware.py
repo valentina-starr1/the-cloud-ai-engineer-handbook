@@ -1,89 +1,52 @@
-"""
-FastAPI middleware exporting OpenTelemetry metrics to Prometheus.
-Requires: fastapi, opentelemetry-sdk, opentelemetry-exporter-prometheus
-
-This middleware instruments:
-- request_latency_seconds histogram
-- ttft_seconds histogram (time to first token, measured when middleware.mark_first_token() is called by your streamer)
-- gpu_vram_used_bytes gauge sampled periodically via nvidia-smi
-
-Usage:
-- Mount this middleware into your FastAPI app and call `mark_first_token(request)` from the streaming response path when the first token is emitted.
-"""
-from fastapi import Request
-from opentelemetry import metrics
-from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.exporter.prometheus import PrometheusMetricsExporter
-from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from starlette.requests import Request
+from starlette.responses import Response
+from starlette.middleware.base import BaseHTTPMiddleware
+from prometheus_client import CollectorRegistry, Gauge, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import multiprocess
 import time
-import threading
-import subprocess
-import re
+import os
 
-# Meter setup
-exporter = PrometheusMetricsExporter()
-reader = PeriodicExportingMetricReader(exporter, export_interval_millis=5000)
-provider = MeterProvider(metric_readers=[reader])
-metrics.set_meter_provider(provider)
-meter = metrics.get_meter(__name__)
+# Simple Prometheus metrics exported by middleware
+registry = CollectorRegistry(auto_describe=False)
+TTFT = Gauge('llm_ttft_seconds', 'Time to first token', ['model', 'deployment'], registry=registry)
+ITL = Gauge('llm_internal_token_latency_seconds', 'Internal token latency', ['model', 'deployment'], registry=registry)
+GPU_VRAM_USAGE = Gauge('gpu_vram_usage_bytes', 'GPU VRAM usage in bytes', ['gpu_id', 'instance'], registry=registry)
+GPU_VRAM_TOTAL = Gauge('gpu_vram_total_bytes', 'GPU VRAM total in bytes', ['gpu_id', 'instance'], registry=registry)
 
-request_latency = meter.create_histogram("request_latency_seconds")
-ttft_latency = meter.create_histogram("ttft_seconds")
-gpu_vram_used = meter.create_observable_gauge("gpu_vram_used_bytes")
+class TelemetryMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Attach start time for request-level TTFT collection
+        request.state._start_time = time.time()
+        # Continue to handler
+        response = await call_next(request)
+        # If a header is set by the app indicating first token time, record it
+        try:
+            first_token_time = float(response.headers.get('X-First-Token-Time', '0'))
+        except Exception:
+            first_token_time = 0.0
+        model = request.headers.get('x-model-name', 'unknown')
+        deployment = request.headers.get('x-deployment', 'unknown')
+        if first_token_time > 0:
+            TTFT.labels(model=model, deployment=deployment).set(first_token_time)
+        # Add GPU metrics if present in response headers (apps or exporters may set these)
+        try:
+            gpu_usage = int(response.headers.get('X-GPU-VRAM-Usage', '0'))
+            gpu_total = int(response.headers.get('X-GPU-VRAM-Total', '0'))
+            gpu_id = response.headers.get('X-GPU-ID', 'gpu0')
+            instance = os.environ.get('HOSTNAME', 'unknown')
+            if gpu_total > 0:
+                GPU_VRAM_USAGE.labels(gpu_id=gpu_id, instance=instance).set(gpu_usage)
+                GPU_VRAM_TOTAL.labels(gpu_id=gpu_id, instance=instance).set(gpu_total)
+        except Exception:
+            pass
+        return response
 
-# Helper to sample GPU memory via nvidia-smi; best-effort and non-blocking
-def sample_gpu_vram():
-    try:
-        out = subprocess.check_output(["nvidia-smi", "--query-gpu=memory.used,memory.total", "--format=csv,noheader,nounits"], encoding="utf-8")
-        vals = []
-        for line in out.strip().splitlines():
-            used, total = line.split(',')
-            vals.append((int(used.strip()) * 1024 * 1024, int(total.strip()) * 1024 * 1024))
-        # Return first GPU used bytes as example
-        if vals:
-            return vals[0][0]
-    except Exception:
-        return 0
+# Expose a Prometheus scrape endpoint that merges with the global collector
+from fastapi import APIRouter
+router = APIRouter()
 
-def _observe_gpu_vram(observer):
-    val = sample_gpu_vram()
-    observer.observe(val, {})
-
-# Register the observable callback
-meter.register_observable_callback(_observe_gpu_vram, [gpu_vram_used])
-
-class TelemetryMiddleware:
-    def __init__(self, app):
-        self.app = app
-
-    async def __call__(self, scope, receive, send):
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
-        start = time.time()
-        first_token_marked = False
-
-        async def inner_send(message):
-            nonlocal first_token_marked
-            if not first_token_marked and message.get("type") == "http.response.body" and message.get("body"):
-                ttft = time.time() - start
-                ttft_latency.record(ttft, {})
-                first_token_marked = True
-            await send(message)
-
-        await self.app(scope, receive, inner_send)
-        latency = time.time() - start
-        request_latency.record(latency, {})
-
-# Example helper for code paths that stream tokens and want to mark TTFT explicitly
-def mark_first_token():
-    # This function is a placeholder for frameworks where middleware cannot intercept first chunk
-    # In such cases call this function at the moment of sending the first token to observe TTFT
-    ttft_latency.record(0.0, {})
-
-# Expose the Prometheus WSGI app via exporter.start_http_server(port)
-def start_metrics_server(port: int = 8000):
-    exporter.start_http_server(port)
-
-if __name__ == "__main__":
-    print("Start the Prometheus metrics server with start_metrics_server() and mount TelemetryMiddleware in your FastAPI app")
+@router.get('/metrics')
+async def metrics():
+    # In multiprocess setups, use the PROMETHEUS_MULTIPROC_DIR mechanism externally
+    output = generate_latest(registry)
+    return Response(content=output, media_type=CONTENT_TYPE_LATEST)
