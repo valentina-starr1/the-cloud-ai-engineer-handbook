@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Simplified Guardrails-like schema example for validating LLM outputs -->
+<guardrails>
+  <output>
+    <type>json</type>
+    <schema>
+      <field name="answer" type="string" max_length="5000"/>
+      <field name="confidence" type="number" min="0" max="1"/>
+      <field name="sources" type="array" items_type="string"/>
+    </schema>
+  </output>
+  <constraints>
+    <no_pii>true</no_pii>
+    <disallow_shell>true</disallow_shell>
+  </constraints>
+</guardrails>
