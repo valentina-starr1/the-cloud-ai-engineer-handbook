@@ -1,0 +1,14 @@
+{
+  "index": {
+    "chunk_size": 512,
+    "chunk_overlap": 64,
+    "hierarchy_levels": ["section", "paragraph", "sentence"],
+    "auto_merge": true,
+    "merge_threshold": 0.75
+  },
+  "retriever": {
+    "top_k": 10,
+    "sentence_window": 3,
+    "use_scoring": true
+  }
+}
