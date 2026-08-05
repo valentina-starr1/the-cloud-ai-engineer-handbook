@@ -1,0 +1,24 @@
+[Unit]
+Description=Ollama Edge Model Server
+After=network.target
+
+[Service]
+Type=simple
+User=ollama
+Group=ollama
+WorkingDirectory=/var/opt/ollama
+Environment="OLLAMA_MODEL_PATH=/var/opt/ollama/models"
+Environment="MAX_CONCURRENCY=2"
+# Limit resources as appropriate
+CPUShares=1024
+MemoryHigh=4G
+# Restart on non-zero exit
+Restart=on-failure
+RestartSec=5s
+ExecStart=/usr/local/bin/ollama serve --port 11434 --model-dir ${OLLAMA_MODEL_PATH}
+# Stop gracefully
+TimeoutStopSec=30
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target
