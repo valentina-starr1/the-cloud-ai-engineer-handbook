@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ai-data-ingestion.fullname" . | default (printf "%s-ingestion" .Release.Name) }}
+  labels:
+    app: {{ include "ai-data-ingestion.name" . | default "ai-data-ingestion" }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "ai-data-ingestion.name" . | default "ai-data-ingestion" }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "ai-data-ingestion.name" . | default "ai-data-ingestion" }}
+    spec:
+      # Node affinity rule example for GPUs or high-memory nodes
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: "kubernetes.io/instance-type"
+                    operator: In
+                    values: {{ toJson .Values.nodeAffinity.preferredInstanceTypes }}
+      # Anti-affinity to spread pods
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: "kubernetes.io/hostname"
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: {{ include "ai-data-ingestion.name" . | default "ai-data-ingestion" }}
+      containers:
+        - name: ingestion-worker
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          resources:
+            requests:
+              cpu: "{{ .Values.resources.requests.cpu }}"
+              memory: "{{ .Values.resources.requests.memory }}"
+            limits:
+              cpu: "{{ .Values.resources.limits.cpu }}"
+              memory: "{{ .Values.resources.limits.memory }}"
+          env:
+            - name: KAFKA_BROKERS
+              value: "{{ .Values.env.kafkaBrokers }}"
+            - name: LOG_LEVEL
+              value: "{{ .Values.env.logLevel }}"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.service.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: {{ .Values.service.port }}
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          ports:
+            - containerPort: {{ .Values.service.port }}
+      nodeSelector: {{ toYaml .Values.nodeSelector | nindent 6 }}
+      tolerations: {{ toYaml .Values.tolerations | nindent 6 }}
+---
+# HorizontalPodAutoscaler (HPA) example using CPU or external metrics (Prometheus, KEDA)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "ai-data-ingestion.fullname" . | default (printf "%s-ingestion" .Release.Name) }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "ai-data-ingestion.fullname" . | default (printf "%s-ingestion" .Release.Name) }}
+  minReplicas: {{ .Values.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}
+# Alternative: add external metrics block for custom metrics (requests/sec, lag)
