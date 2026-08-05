@@ -1,0 +1,27 @@
+{
+  "model": {
+    "name_or_path": "openai/llama-2-13b", 
+    "dtype": "float16"
+  },
+  "engine": {
+    "max_sequence_length": 2048,
+    "prefill": {
+      "max_batch_size": 8
+    },
+    "inference": {
+      "max_batch_size": 4,
+      "num_shard": 4
+    },
+    "paged_attention": {
+      "enabled": true,
+      "page_size": 32768
+    },
+    "memory": {
+      "worker_gpu_memory_limit": "22GB",
+      "cpu_offload": false
+    }
+  },
+  "logging": {
+    "level": "INFO"
+  }
+}
