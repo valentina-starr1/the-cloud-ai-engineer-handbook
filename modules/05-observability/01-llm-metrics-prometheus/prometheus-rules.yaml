@@ -1,0 +1,38 @@
+groups:
+- name: llm-alerts
+  rules:
+  - alert: LLMLatencySpike
+    expr: histogram_quantile(0.95, sum(rate(request_latency_seconds_bucket[5m])) by (le)) > 2
+    for: 2m
+    labels:
+      severity: page
+    annotations:
+      summary: "95th percentile LLM request latency > 2s"
+      description: "High latency detected for LLM requests. Check model servers and queue lengths."
+
+  - alert: LLMTTFTHigh
+    expr: histogram_quantile(0.95, sum(rate(ttft_seconds_bucket[5m])) by (le)) > 1
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "TTFT (95th) > 1s"
+      description: "Time to first token is high, may indicate model cold start or I/O bottleneck."
+
+  - alert: GPUVRAMSaturation
+    expr: avg by(instance) (nvidia_gpu_memory_used_bytes / nvidia_gpu_memory_total_bytes) > 0.9
+    for: 1m
+    labels:
+      severity: page
+    annotations:
+      summary: "GPU VRAM saturation > 90%"
+      description: "GPU memory near full. Consider scaling out or reducing batch sizes."
+
+  - alert: CUDAOOMDetected
+    expr: increase(cuda_oom_events_total[5m]) > 0
+    for: 0m
+    labels:
+      severity: critical
+    annotations:
+      summary: "CUDA OOM events detected"
+      description: "One or more CUDA OOM events observed in the cluster. Immediate investigation required."
