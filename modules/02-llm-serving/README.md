@@ -16,3 +16,7 @@ Deliverables
 - Benchmarks and tooling for latency/throughput measurement
 
 Path: modules/02-llm-serving/
+
+Chapters
+
+- 01-vllm-kubernetes-deployment: modules/02-llm-serving/01-vllm-kubernetes-deployment.md

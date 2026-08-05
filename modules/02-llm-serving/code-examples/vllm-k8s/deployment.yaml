@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-server
+  labels:
+    app: vllm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm
+  template:
+    metadata:
+      labels:
+        app: vllm
+    spec:
+      nodeSelector:
+        kubernetes.io/arch: "amd64"
+        cloud.google.com/gke-accelerator: "nvidia-tesla-v100" # adjust for your cloud provider
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+      containers:
+        - name: vllm
+          image: ghcr.io/vllm-project/vllm:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - "serve"
+            - "--model"
+            - "/models/my-model"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "8080"
+            # Add paging/cache options as needed for your vLLM build
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            limits:
+              nvidia.com/gpu: "4"     # Request 4 GPUs for this pod (adjust to your node sizes)
+              cpu: "8"
+              memory: "64Gi"
+            requests:
+              cpu: "4"
+              memory: "32Gi"
+          env:
+            - name: MODEL_PATH
+              value: "/models/my-model"
+            - name: VLLM_PAGE_CACHE_DIR
+              value: "/var/lib/vllm/pagecache"
+            - name: OMP_NUM_THREADS
+              value: "4"
+          volumeMounts:
+            - name: model-volume
+              mountPath: /models
+            - name: pagecache
+              mountPath: /var/lib/vllm/pagecache
+          livenessProbe:
+            httpGet:
+              path: /v1/health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /v1/health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+      volumes:
+        - name: model-volume
+          hostPath:
+            path: /mnt/models/my-model
+            type: DirectoryOrCreate
+        - name: pagecache
+          hostPath:
+            path: /mnt/vllm-pagecache
+            type: DirectoryOrCreate
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
