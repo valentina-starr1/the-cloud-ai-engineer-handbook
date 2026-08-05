@@ -1,0 +1,46 @@
+image:
+  repository: milvusdb/milvus
+  tag: v2.2.11
+
+minio:
+  enabled: true
+  accessKey: minio
+  secretKey: minio123
+  persistence:
+    enabled: true
+    size: 50Gi
+
+pulsar:
+  enabled: false
+
+kafka:
+  enabled: true
+  # Configure external Kafka or embedded via chart
+  brokers: ["kafka:9092"]
+
+components:
+  dataNode:
+    replicaCount: 3
+    resources:
+      requests:
+        cpu: "2"
+        memory: "8Gi"
+      limits:
+        cpu: "4"
+        memory: "16Gi"
+  queryNode:
+    replicaCount: 2
+    resources:
+      requests:
+        cpu: "1"
+        memory: "4Gi"
+  indexNode:
+    replicaCount: 2
+    resources:
+      requests:
+        cpu: "4"
+        memory: "16Gi"
+
+persistence:
+  enabled: true
+  storageClass: "standard"
